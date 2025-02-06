@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Article } from "@shared/schema";
 import ArticleForm from "@/components/article-form";
+import ArticleIdeas from "@/components/article-ideas";
 import DashboardStats from "@/components/dashboard-stats";
 import { Link } from "wouter";
 import {
@@ -10,13 +11,16 @@ import {
   LogOut,
   PenSquare,
   BookOpen,
+  Sparkles,
 } from "lucide-react";
+import { useState } from "react";
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
   const { data: articles } = useQuery<Article[]>({
     queryKey: ["/api/articles"],
   });
+  const [showManualForm, setShowManualForm] = useState(false);
 
   const userArticles = articles?.filter(
     (article) => article.authorId === user?.id
@@ -52,11 +56,28 @@ export default function HomePage() {
       <main className="container mx-auto px-4 py-8">
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold flex items-center">
-              <PenSquare className="h-6 w-6 mr-2" />
-              Create New Article
-            </h2>
-            <ArticleForm />
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold flex items-center">
+                <Sparkles className="h-6 w-6 mr-2" />
+                Generate Articles
+              </h2>
+              <Button
+                variant="outline"
+                onClick={() => setShowManualForm(!showManualForm)}
+              >
+                {showManualForm ? "Use AI Generator" : "Write Manually"}
+              </Button>
+            </div>
+            {showManualForm ? (
+              <ArticleForm />
+            ) : (
+              <ArticleIdeas
+                onSelectIdea={(title, keyword) => {
+                  // Handle when an idea is selected
+                  console.log("Selected:", title, keyword);
+                }}
+              />
+            )}
           </div>
           <div className="space-y-6">
             <h2 className="text-2xl font-bold">Dashboard Overview</h2>
