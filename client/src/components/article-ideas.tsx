@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, Check, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -11,9 +11,14 @@ interface ArticleIdeasProps {
   onSelectIdea: (title: string, keyword: string) => void;
 }
 
+interface IdeaItem {
+  title: string;
+  selected: boolean;
+}
+
 export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
   const [keyword, setKeyword] = useState("");
-  const [ideas, setIdeas] = useState<string[]>([]);
+  const [ideas, setIdeas] = useState<IdeaItem[]>([]);
   const { toast } = useToast();
 
   const generateIdeas = useMutation({
@@ -22,7 +27,7 @@ export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
       return res.json();
     },
     onSuccess: (data: string[]) => {
-      setIdeas(data);
+      setIdeas(data.map(title => ({ title, selected: false })));
       toast({
         title: "Success",
         description: "Article ideas generated successfully",
@@ -46,12 +51,11 @@ export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
       toast({
         title: "Success",
         description: "Article generated successfully",
       });
-      setIdeas([]);
-      setKeyword("");
     },
     onError: (error: Error) => {
       toast({
@@ -61,6 +65,21 @@ export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
       });
     },
   });
+
+  const generateSelected = async () => {
+    const selectedIdeas = ideas.filter(idea => idea.selected);
+    for (const idea of selectedIdeas) {
+      await generateArticle.mutateAsync({ title: idea.title, keyword });
+    }
+    setIdeas([]);
+    setKeyword("");
+  };
+
+  const toggleIdeaSelection = (index: number) => {
+    setIdeas(ideas.map((idea, i) => 
+      i === index ? { ...idea, selected: !idea.selected } : idea
+    ));
+  };
 
   return (
     <div className="space-y-4">
@@ -84,19 +103,27 @@ export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
 
       {ideas.length > 0 && (
         <div className="space-y-2">
-          <h3 className="font-medium">Select articles to generate:</h3>
+          <div className="flex justify-between items-center">
+            <h3 className="font-medium">Select articles to generate:</h3>
+            <Button
+              onClick={generateSelected}
+              disabled={!ideas.some(idea => idea.selected) || generateArticle.isPending}
+            >
+              {generateArticle.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Generate Selected
+            </Button>
+          </div>
           {ideas.map((idea, index) => (
-            <Card key={index}>
+            <Card key={index} className={idea.selected ? "border-primary" : ""}>
               <CardContent className="flex items-center justify-between p-4">
-                <p>{idea}</p>
+                <p>{idea.title}</p>
                 <div className="flex gap-2">
                   <Button
-                    variant="ghost"
+                    variant={idea.selected ? "default" : "ghost"}
                     size="icon"
-                    onClick={() => {
-                      generateArticle.mutate({ title: idea, keyword });
-                      onSelectIdea(idea, keyword);
-                    }}
+                    onClick={() => toggleIdeaSelection(index)}
                     disabled={generateArticle.isPending}
                   >
                     <Check className="h-4 w-4" />
