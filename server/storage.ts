@@ -1,88 +1,82 @@
-import { InsertUser, User, InsertArticle, Article } from "@shared/schema";
-import createMemoryStore from "memorystore";
+import { InsertUser, User, InsertArticle, Article, users, articles } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import session from "express-session";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+
   getArticles(): Promise<Article[]>;
   getArticle(id: number): Promise<Article | undefined>;
   createArticle(article: InsertArticle): Promise<Article>;
   updateArticle(id: number, article: Partial<InsertArticle>): Promise<Article>;
   deleteArticle(id: number): Promise<void>;
-  
+
   sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private articles: Map<number, Article>;
+export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
-  private currentUserId: number;
-  private currentArticleId: number;
 
   constructor() {
-    this.users = new Map();
-    this.articles = new Map();
-    this.currentUserId = 1;
-    this.currentArticleId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true,
     });
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async getArticles(): Promise<Article[]> {
-    return Array.from(this.articles.values());
+    return await db.select().from(articles);
   }
 
   async getArticle(id: number): Promise<Article | undefined> {
-    return this.articles.get(id);
+    const [article] = await db.select().from(articles).where(eq(articles.id, id));
+    return article;
   }
 
   async createArticle(insertArticle: InsertArticle): Promise<Article> {
-    const id = this.currentArticleId++;
-    const article: Article = {
-      ...insertArticle,
-      id,
-      createdAt: new Date(),
-    };
-    this.articles.set(id, article);
+    const [article] = await db.insert(articles).values(insertArticle).returning();
     return article;
   }
 
   async updateArticle(id: number, article: Partial<InsertArticle>): Promise<Article> {
-    const existing = await this.getArticle(id);
-    if (!existing) throw new Error("Article not found");
-    
-    const updated = { ...existing, ...article };
-    this.articles.set(id, updated);
+    const [updated] = await db
+      .update(articles)
+      .set(article)
+      .where(eq(articles.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Article not found");
+    }
+
     return updated;
   }
 
   async deleteArticle(id: number): Promise<void> {
-    this.articles.delete(id);
+    await db.delete(articles).where(eq(articles.id, id));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
