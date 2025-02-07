@@ -59,8 +59,11 @@ async function generateUniqueSlug(title: string): Promise<string> {
 }
 
 export function registerRoutes(app: Express): Server {
+  // API router setup
+  const apiRouter = express.Router();
+
   // JSON parsing middleware with error handling
-  app.use(express.json({
+  apiRouter.use(express.json({
     verify: (req, res, buf) => {
       try {
         JSON.parse(buf.toString());
@@ -72,28 +75,9 @@ export function registerRoutes(app: Express): Server {
     }
   }));
 
-  // CORS and content type middleware
-  app.use((req, res, next) => {
-    console.log('Request URL:', req.url);
-    console.log('Request Method:', req.method);
-    console.log('Request Headers:', req.headers);
-
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(200);
-    }
-    next();
-  });
-
-  // API router setup
-  const apiRouter = express.Router();
-
   // Set JSON content type for all API routes
   apiRouter.use((req, res, next) => {
-    console.log('API Request:', req.url);
-    res.type('application/json');
+    res.setHeader('Content-Type', 'application/json');
     next();
   });
 
@@ -105,12 +89,6 @@ export function registerRoutes(app: Express): Server {
     }
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
-
-  // Mount API router before setting up auth
-  app.use('/api', apiRouter);
-
-  // Set up authentication after API router
-  setupAuth(app);
 
   // Article generation endpoint
   apiRouter.post("/articles/generate", async (req, res) => {
@@ -274,6 +252,20 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // Mount API router at /api path before any other middleware
+  app.use('/api', (req, res, next) => {
+    // Log all API requests
+    console.log(`API ${req.method} ${req.path}`, {
+      headers: req.headers,
+      body: req.body,
+      query: req.query
+    });
+    next();
+  }, apiRouter);
+
+  // Set up authentication after API routes
+  setupAuth(app);
 
   const httpServer = createServer(app);
   return httpServer;
