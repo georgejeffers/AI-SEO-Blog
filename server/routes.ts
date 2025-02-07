@@ -6,15 +6,25 @@ import { insertArticleSchema } from "@shared/schema";
 import { generateArticleIdeas, generateArticleContent } from "./services/gemini";
 
 function cleanContent(content: string): string {
-  // Remove extra ** from keywords
+  // Handle array of strings (like keywords)
   if (Array.isArray(content)) {
-    return content.map(item => item.replace(/\*\*/g, ''));
+    return content.map(item => 
+      item
+        .replace(/^\*\*/, '') // Remove starting **
+        .replace(/\*\*$/, '') // Remove ending **
+        .replace(/\*\*/g, '') // Remove any remaining **
+        .trim()
+    );
   }
 
-  // Clean up markdown-style formatting
+  // Clean up markdown-style formatting in content
   return content
+    .replace(/^\*\*/, '') // Remove starting **
+    .replace(/\*\*$/, '') // Remove ending **
     .replace(/\*\*\s*(.*?)\s*\*\*/g, '$1') // Remove ** around text
     .replace(/^#+\s*/gm, '') // Remove markdown headers
+    .replace(/^\*\s+/gm, '• ') // Replace markdown bullets with bullet points
+    .replace(/\*\*/g, '') // Remove any remaining **
     .trim();
 }
 
