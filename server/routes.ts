@@ -5,19 +5,45 @@ import { storage } from "./storage";
 import { insertArticleSchema } from "@shared/schema";
 import { generateArticleIdeas, generateArticleContent } from "./services/gemini";
 
+function cleanContent(content: string): string {
+  // Remove extra ** from keywords
+  if (Array.isArray(content)) {
+    return content.map(item => item.replace(/\*\*/g, ''));
+  }
+
+  // Clean up markdown-style formatting
+  return content
+    .replace(/\*\*\s*(.*?)\s*\*\*/g, '$1') // Remove ** around text
+    .replace(/^#+\s*/gm, '') // Remove markdown headers
+    .trim();
+}
+
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
   // Articles API
   app.get("/api/articles", async (_req, res) => {
     const articles = await storage.getArticles();
-    res.json(articles);
+    // Clean the content and keywords before sending
+    const cleanedArticles = articles.map(article => ({
+      ...article,
+      content: cleanContent(article.content),
+      keywords: article.keywords.map(k => cleanContent(k))
+    }));
+    res.json(cleanedArticles);
   });
 
   app.get("/api/articles/:id", async (req, res) => {
     const article = await storage.getArticle(parseInt(req.params.id));
     if (!article) return res.sendStatus(404);
-    res.json(article);
+
+    // Clean the content and keywords before sending
+    const cleanedArticle = {
+      ...article,
+      content: cleanContent(article.content),
+      keywords: article.keywords.map(k => cleanContent(k))
+    };
+    res.json(cleanedArticle);
   });
 
   app.post("/api/articles", async (req, res) => {
@@ -82,7 +108,12 @@ export function registerRoutes(app: Express): Server {
     if (!article) return res.sendStatus(404);
     if (article.authorId !== req.user.id) return res.sendStatus(403);
 
-    const updated = await storage.updateArticle(article.id, req.body);
+    const parseResult = insertArticleSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json(parseResult.error);
+    }
+
+    const updated = await storage.updateArticle(article.id, parseResult.data);
     res.json(updated);
   });
 

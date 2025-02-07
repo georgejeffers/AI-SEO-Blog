@@ -7,6 +7,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 
 import HomePage from "@/pages/home-page";
 import BlogPage from "@/pages/blog-page";
+import BlogManagementPage from "@/pages/blog-management";
 import AuthPage from "@/pages/auth-page";
 import NotFound from "@/pages/not-found";
 
@@ -15,6 +16,7 @@ function Router() {
     <Switch>
       <ProtectedRoute path="/" component={HomePage} />
       <Route path="/blog" component={BlogPage} />
+      <ProtectedRoute path="/blog/manage" component={BlogManagementPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
