@@ -16,14 +16,29 @@ interface IdeaItem {
   selected: boolean;
 }
 
+interface WritingPreferences {
+  context: string;
+  explicitness: number;
+}
+
 export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
   const [keyword, setKeyword] = useState("");
   const [ideas, setIdeas] = useState<IdeaItem[]>([]);
   const { toast } = useToast();
 
+  // Get writing preferences from localStorage
+  const getWritingPreferences = (): WritingPreferences | undefined => {
+    const saved = localStorage.getItem("writingPreferences");
+    return saved ? JSON.parse(saved) : undefined;
+  };
+
   const generateIdeas = useMutation({
     mutationFn: async (keyword: string) => {
-      const res = await apiRequest("POST", "/api/articles/ideas", { keyword });
+      const preferences = getWritingPreferences();
+      const res = await apiRequest("POST", "/api/articles/ideas", { 
+        keyword,
+        preferences 
+      });
       return res.json();
     },
     onSuccess: (data: string[]) => {
@@ -44,9 +59,11 @@ export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
 
   const generateArticle = useMutation({
     mutationFn: async ({ title, keyword }: { title: string; keyword: string }) => {
+      const preferences = getWritingPreferences();
       const res = await apiRequest("POST", "/api/articles/generate", {
         title,
         keyword,
+        preferences
       });
       return res.json();
     },
