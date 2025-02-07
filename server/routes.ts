@@ -7,28 +7,25 @@ import { generateArticleIdeas, generateArticleContent } from "./services/gemini"
 import express from "express";
 
 function cleanContent(content: string): string | string[] {
-  // Handle array of strings (like keywords)
   if (Array.isArray(content)) {
     return content.map(item => 
       item
-        .replace(/^\*\*/, '') // Remove starting **
-        .replace(/\*\*$/, '') // Remove ending **
-        .replace(/\*\*/g, '') // Remove any remaining **
+        .replace(/^\*\*/, '')
+        .replace(/\*\*$/, '')
+        .replace(/\*\*/g, '')
         .trim()
     );
   }
 
-  // Clean up markdown-style formatting in content
   let cleanedContent = content
-    .replace(/^\*\*/, '') // Remove starting **
-    .replace(/\*\*$/, '') // Remove ending **
-    .replace(/\*\*\s*(.*?)\s*\*\*/g, '$1') // Remove ** around text
-    .replace(/^#+\s*/gm, '') // Remove markdown headers
-    .replace(/^\*\s+/gm, '• ') // Replace markdown bullets with bullet points
-    .replace(/\*\*/g, '') // Remove any remaining **
+    .replace(/^\*\*/, '')
+    .replace(/\*\*$/, '')
+    .replace(/\*\*\s*(.*?)\s*\*\*/g, '$1')
+    .replace(/^#+\s*/gm, '')
+    .replace(/^\*\s+/gm, '• ')
+    .replace(/\*\*/g, '')
     .trim();
 
-  // Remove KEYWORDS section and everything after it
   const keywordsIndex = cleanedContent.indexOf('KEYWORDS:');
   if (keywordsIndex !== -1) {
     cleanedContent = cleanedContent.substring(0, keywordsIndex).trim();
@@ -59,10 +56,13 @@ async function generateUniqueSlug(title: string): Promise<string> {
 }
 
 export function registerRoutes(app: Express): Server {
+  // Set up authentication first
+  setupAuth(app);
+
   // API router setup
   const apiRouter = express.Router();
 
-  // JSON parsing middleware with error handling
+  // API middleware
   apiRouter.use(express.json({
     verify: (req, res, buf) => {
       try {
@@ -75,22 +75,11 @@ export function registerRoutes(app: Express): Server {
     }
   }));
 
-  // Set JSON content type for all API routes
   apiRouter.use((req, res, next) => {
     res.setHeader('Content-Type', 'application/json');
     next();
   });
 
-  // API error handling middleware
-  apiRouter.use((err: any, _req: any, res: any, next: any) => {
-    console.error('API Error:', err);
-    if (res.headersSent) {
-      return next(err);
-    }
-    res.status(500).json({ error: err.message || 'Internal server error' });
-  });
-
-  // Article ideas endpoint
   apiRouter.post("/articles/ideas", async (req, res) => {
     try {
       console.log('Generate Ideas Request Body:', req.body);
@@ -108,7 +97,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Article generation endpoint
   apiRouter.post("/articles/generate", async (req, res) => {
     try {
       console.log('Generate Article Request Body:', req.body);
@@ -144,7 +132,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Other article routes
   apiRouter.get("/articles", async (_req, res) => {
     try {
       const articles = await storage.getArticles();
@@ -271,9 +258,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Mount API router at /api path before any other middleware
+  // Mount API router at /api path
   app.use('/api', (req, res, next) => {
-    // Log all API requests
     console.log(`API ${req.method} ${req.path}`, {
       headers: req.headers,
       body: req.body,
@@ -281,9 +267,6 @@ export function registerRoutes(app: Express): Server {
     });
     next();
   }, apiRouter);
-
-  // Set up authentication after API routes
-  setupAuth(app);
 
   const httpServer = createServer(app);
   return httpServer;
