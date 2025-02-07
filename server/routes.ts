@@ -28,13 +28,33 @@ function cleanContent(content: string): string {
     .trim();
 }
 
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+async function generateUniqueSlug(title: string): Promise<string> {
+  let slug = generateSlug(title);
+  const articles = await storage.getArticles();
+  let counter = 1;
+  let uniqueSlug = slug;
+
+  while (articles.some(article => article.slug === uniqueSlug)) {
+    uniqueSlug = `${slug}-${counter}`;
+    counter++;
+  }
+
+  return uniqueSlug;
+}
+
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
   // Articles API
   app.get("/api/articles", async (_req, res) => {
     const articles = await storage.getArticles();
-    // Clean the content and keywords before sending
     const cleanedArticles = articles.map(article => ({
       ...article,
       content: cleanContent(article.content),
@@ -43,11 +63,10 @@ export function registerRoutes(app: Express): Server {
     res.json(cleanedArticles);
   });
 
-  app.get("/api/articles/:id", async (req, res) => {
-    const article = await storage.getArticle(parseInt(req.params.id));
+  app.get("/api/articles/:slug", async (req, res) => {
+    const article = await storage.getArticleBySlug(req.params.slug);
     if (!article) return res.sendStatus(404);
 
-    // Clean the content and keywords before sending
     const cleanedArticle = {
       ...article,
       content: cleanContent(article.content),
@@ -64,28 +83,24 @@ export function registerRoutes(app: Express): Server {
       return res.status(400).json(parseResult.error);
     }
 
+    const slug = await generateUniqueSlug(parseResult.data.title);
     const article = await storage.createArticle({
       ...parseResult.data,
+      slug,
       authorId: req.user.id,
     });
     res.status(201).json(article);
   });
 
-  // New endpoints for AI article generation
-  app.post("/api/articles/ideas", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    const { keyword } = req.body;
-    if (!keyword) {
-      return res.status(400).json({ message: "Keyword is required" });
-    }
-
-    try {
-      const ideas = await generateArticleIdeas(keyword);
-      res.json(ideas);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to generate article ideas" });
-    }
+  // Search endpoint
+  app.get("/api/articles/search/:query", async (req, res) => {
+    const articles = await storage.searchArticles(req.params.query);
+    const cleanedArticles = articles.map(article => ({
+      ...article,
+      content: cleanContent(article.content),
+      keywords: article.keywords.map(k => cleanContent(k))
+    }));
+    res.json(cleanedArticles);
   });
 
   app.post("/api/articles/generate", async (req, res) => {
@@ -98,8 +113,10 @@ export function registerRoutes(app: Express): Server {
 
     try {
       const generated = await generateArticleContent(title, keyword);
+      const slug = await generateUniqueSlug(title);
       const article = await storage.createArticle({
         title,
+        slug,
         content: generated.content,
         keywords: generated.keywords,
         seoScore: generated.seoScore,
@@ -123,7 +140,11 @@ export function registerRoutes(app: Express): Server {
       return res.status(400).json(parseResult.error);
     }
 
-    const updated = await storage.updateArticle(article.id, parseResult.data);
+    const slug = await generateUniqueSlug(parseResult.data.title);
+    const updated = await storage.updateArticle(article.id, {
+      ...parseResult.data,
+      slug,
+    });
     res.json(updated);
   });
 
