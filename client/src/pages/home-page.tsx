@@ -12,6 +12,7 @@ import {
   PenSquare,
   BookOpen,
   Sparkles,
+  Settings,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -39,6 +40,12 @@ export default function HomePage() {
               <Button variant="ghost">
                 <BookOpen className="h-4 w-4 mr-2" />
                 View Blog
+              </Button>
+            </Link>
+            <Link href="/blog/manage">
+              <Button variant="ghost">
+                <Settings className="h-4 w-4 mr-2" />
+                Manage Blog
               </Button>
             </Link>
             <Button
