@@ -65,6 +65,7 @@ export function registerRoutes(app: Express): Server {
       try {
         JSON.parse(buf.toString());
       } catch (e) {
+        console.error('JSON Parse Error:', e);
         res.status(400).json({ error: 'Invalid JSON' });
         throw new Error('Invalid JSON');
       }
@@ -73,6 +74,10 @@ export function registerRoutes(app: Express): Server {
 
   // CORS and content type middleware
   app.use((req, res, next) => {
+    console.log('Request URL:', req.url);
+    console.log('Request Method:', req.method);
+    console.log('Request Headers:', req.headers);
+
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -82,11 +87,15 @@ export function registerRoutes(app: Express): Server {
     next();
   });
 
-  // Set up authentication
-  setupAuth(app);
-
-  // Create API router
+  // API router setup
   const apiRouter = express.Router();
+
+  // Set JSON content type for all API routes
+  apiRouter.use((req, res, next) => {
+    console.log('API Request:', req.url);
+    res.type('application/json');
+    next();
+  });
 
   // API error handling middleware
   apiRouter.use((err: any, _req: any, res: any, next: any) => {
@@ -97,9 +106,17 @@ export function registerRoutes(app: Express): Server {
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
+  // Mount API router before setting up auth
+  app.use('/api', apiRouter);
+
+  // Set up authentication after API router
+  setupAuth(app);
+
   // Article generation endpoint
   apiRouter.post("/articles/generate", async (req, res) => {
     try {
+      console.log('Generate Article Request Body:', req.body);
+
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -131,13 +148,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Mount API router first, before any other middleware
-  app.use('/api', (req, res, next) => {
-    res.type('application/json');
-    next();
-  }, apiRouter);
-
-
   // Other article routes (these remain largely the same, just adjusted to the new router structure)
   apiRouter.get("/articles", async (_req, res) => {
     try {
@@ -149,6 +159,7 @@ export function registerRoutes(app: Express): Server {
       }));
       res.json(cleanedArticles);
     } catch (error: any) {
+      console.error("Error fetching articles:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -163,6 +174,7 @@ export function registerRoutes(app: Express): Server {
       }));
       res.json(cleanedArticles);
     } catch (error: any) {
+      console.error("Error searching articles:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -181,12 +193,14 @@ export function registerRoutes(app: Express): Server {
       };
       res.json(cleanedArticle);
     } catch (error: any) {
+      console.error("Error fetching article:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
   apiRouter.post("/articles", async (req, res) => {
     try {
+      console.log('Create Article Request Body:', req.body);
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -204,12 +218,14 @@ export function registerRoutes(app: Express): Server {
       });
       res.status(201).json(article);
     } catch (error: any) {
+      console.error("Error creating article:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
   apiRouter.put("/articles/:id", async (req, res) => {
     try {
+      console.log('Update Article Request Body:', req.body);
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -234,6 +250,7 @@ export function registerRoutes(app: Express): Server {
       });
       res.json(updated);
     } catch (error: any) {
+      console.error("Error updating article:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -255,6 +272,7 @@ export function registerRoutes(app: Express): Server {
       await storage.deleteArticle(article.id);
       res.status(204).json({});
     } catch (error: any) {
+      console.error("Error deleting article:", error);
       res.status(500).json({ error: error.message });
     }
   });
