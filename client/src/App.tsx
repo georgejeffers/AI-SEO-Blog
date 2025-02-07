@@ -17,10 +17,10 @@ function Router() {
     <Switch>
       <ProtectedRoute path="/" component={HomePage} />
       <Route path="/blog" component={BlogPage} />
+      <ProtectedRoute path="/blog/manage" component={BlogManagementPage} />
       <Route path="/blog/:username">
         {(params) => <BlogPage username={params.username} />}
       </Route>
-      <ProtectedRoute path="/blog/manage" component={BlogManagementPage} />
       <Route path="/blog/:slug">
         {(params) => <ArticlePage slug={params.slug} />}
       </Route>
