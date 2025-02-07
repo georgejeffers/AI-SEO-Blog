@@ -1,6 +1,6 @@
 import { InsertUser, User, InsertArticle, Article, users, articles } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, ilike, or } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -14,9 +14,11 @@ export interface IStorage {
 
   getArticles(): Promise<Article[]>;
   getArticle(id: number): Promise<Article | undefined>;
-  createArticle(article: InsertArticle): Promise<Article>;
-  updateArticle(id: number, article: Partial<InsertArticle>): Promise<Article>;
+  getArticleBySlug(slug: string): Promise<Article | undefined>;
+  createArticle(article: InsertArticle & { slug: string }): Promise<Article>;
+  updateArticle(id: number, article: Partial<InsertArticle & { slug: string }>): Promise<Article>;
   deleteArticle(id: number): Promise<void>;
+  searchArticles(query: string): Promise<Article[]>;
 
   sessionStore: session.Store;
 }
@@ -55,12 +57,17 @@ export class DatabaseStorage implements IStorage {
     return article;
   }
 
-  async createArticle(insertArticle: InsertArticle): Promise<Article> {
+  async getArticleBySlug(slug: string): Promise<Article | undefined> {
+    const [article] = await db.select().from(articles).where(eq(articles.slug, slug));
+    return article;
+  }
+
+  async createArticle(insertArticle: InsertArticle & { slug: string }): Promise<Article> {
     const [article] = await db.insert(articles).values(insertArticle).returning();
     return article;
   }
 
-  async updateArticle(id: number, article: Partial<InsertArticle>): Promise<Article> {
+  async updateArticle(id: number, article: Partial<InsertArticle & { slug: string }>): Promise<Article> {
     const [updated] = await db
       .update(articles)
       .set(article)
@@ -76,6 +83,18 @@ export class DatabaseStorage implements IStorage {
 
   async deleteArticle(id: number): Promise<void> {
     await db.delete(articles).where(eq(articles.id, id));
+  }
+
+  async searchArticles(query: string): Promise<Article[]> {
+    return await db
+      .select()
+      .from(articles)
+      .where(
+        or(
+          ilike(articles.title, `%${query}%`),
+          ilike(articles.content, `%${query}%`)
+        )
+      );
   }
 }
 

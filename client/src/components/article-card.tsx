@@ -2,22 +2,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Article } from "@shared/schema";
 import { format } from "date-fns";
-import { useState } from "react";
-import ArticleDialog from "./article-dialog";
+import { Link } from "wouter";
 
 interface ArticleCardProps {
   article: Article;
 }
 
 export default function ArticleCard({ article }: ArticleCardProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-
   return (
-    <>
-      <Card 
-        className="cursor-pointer hover:bg-accent/50 transition-colors"
-        onClick={() => setDialogOpen(true)}
-      >
+    <Link href={`/blog/${article.slug}`}>
+      <Card className="cursor-pointer hover:bg-accent/50 transition-colors">
         <CardHeader>
           <CardTitle>{article.title}</CardTitle>
           <div className="flex flex-wrap gap-2 mt-2">
@@ -37,12 +31,6 @@ export default function ArticleCard({ article }: ArticleCardProps) {
           </div>
         </CardContent>
       </Card>
-
-      <ArticleDialog 
-        article={article} 
-        open={dialogOpen} 
-        onOpenChange={setDialogOpen}
-      />
-    </>
+    </Link>
   );
 }
