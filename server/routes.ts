@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { insertArticleSchema } from "@shared/schema";
 import { generateArticleIdeas, generateArticleContent } from "./services/gemini";
 
-function cleanContent(content: string): string {
+function cleanContent(content: string): string | string[] {
   // Handle array of strings (like keywords)
   if (Array.isArray(content)) {
     return content.map(item => 
@@ -18,7 +18,7 @@ function cleanContent(content: string): string {
   }
 
   // Clean up markdown-style formatting in content
-  return content
+  let cleanedContent = content
     .replace(/^\*\*/, '') // Remove starting **
     .replace(/\*\*$/, '') // Remove ending **
     .replace(/\*\*\s*(.*?)\s*\*\*/g, '$1') // Remove ** around text
@@ -26,6 +26,14 @@ function cleanContent(content: string): string {
     .replace(/^\*\s+/gm, '• ') // Replace markdown bullets with bullet points
     .replace(/\*\*/g, '') // Remove any remaining **
     .trim();
+
+  // Remove KEYWORDS section and everything after it
+  const keywordsIndex = cleanedContent.indexOf('KEYWORDS:');
+  if (keywordsIndex !== -1) {
+    cleanedContent = cleanedContent.substring(0, keywordsIndex).trim();
+  }
+
+  return cleanedContent;
 }
 
 function generateSlug(title: string): string {
