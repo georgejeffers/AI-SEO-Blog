@@ -60,66 +60,94 @@ async function generateUniqueSlug(title: string): Promise<string> {
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
+  // Set JSON content type for all API routes
+  app.use('/api', (req, res, next) => {
+    res.type('application/json');
+    next();
+  });
+
   // Articles API
   app.get("/api/articles", async (_req, res) => {
-    const articles = await storage.getArticles();
-    const cleanedArticles = articles.map(article => ({
-      ...article,
-      content: cleanContent(article.content),
-      keywords: article.keywords.map(k => cleanContent(k))
-    }));
-    res.json(cleanedArticles);
+    try {
+      const articles = await storage.getArticles();
+      const cleanedArticles = articles.map(article => ({
+        ...article,
+        content: cleanContent(article.content),
+        keywords: article.keywords.map(k => cleanContent(k))
+      }));
+      res.json(cleanedArticles);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.get("/api/articles/:slug", async (req, res) => {
-    const article = await storage.getArticleBySlug(req.params.slug);
-    if (!article) return res.sendStatus(404);
+    try {
+      const article = await storage.getArticleBySlug(req.params.slug);
+      if (!article) {
+        return res.status(404).json({ error: "Article not found" });
+      }
 
-    const cleanedArticle = {
-      ...article,
-      content: cleanContent(article.content),
-      keywords: article.keywords.map(k => cleanContent(k))
-    };
-    res.json(cleanedArticle);
+      const cleanedArticle = {
+        ...article,
+        content: cleanContent(article.content),
+        keywords: article.keywords.map(k => cleanContent(k))
+      };
+      res.json(cleanedArticle);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.post("/api/articles", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
 
-    const parseResult = insertArticleSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json(parseResult.error);
+      const parseResult = insertArticleSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: parseResult.error });
+      }
+
+      const slug = await generateUniqueSlug(parseResult.data.title);
+      const article = await storage.createArticle({
+        ...parseResult.data,
+        slug,
+        authorId: req.user.id,
+      });
+      res.status(201).json(article);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
-
-    const slug = await generateUniqueSlug(parseResult.data.title);
-    const article = await storage.createArticle({
-      ...parseResult.data,
-      slug,
-      authorId: req.user.id,
-    });
-    res.status(201).json(article);
   });
 
   // Search endpoint
   app.get("/api/articles/search/:query", async (req, res) => {
-    const articles = await storage.searchArticles(req.params.query);
-    const cleanedArticles = articles.map(article => ({
-      ...article,
-      content: cleanContent(article.content),
-      keywords: article.keywords.map(k => cleanContent(k))
-    }));
-    res.json(cleanedArticles);
+    try {
+      const articles = await storage.searchArticles(req.params.query);
+      const cleanedArticles = articles.map(article => ({
+        ...article,
+        content: cleanContent(article.content),
+        keywords: article.keywords.map(k => cleanContent(k))
+      }));
+      res.json(cleanedArticles);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.post("/api/articles/generate", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    const { title, keyword } = req.body;
-    if (!title || !keyword) {
-      return res.status(400).json({ message: "Title and keyword are required" });
-    }
-
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { title, keyword } = req.body;
+      if (!title || !keyword) {
+        return res.status(400).json({ error: "Title and keyword are required" });
+      }
+
       const generated = await generateArticleContent(title, keyword);
       const slug = await generateUniqueSlug(title);
       const article = await storage.createArticle({
@@ -130,41 +158,63 @@ export function registerRoutes(app: Express): Server {
         seoScore: generated.seoScore,
         authorId: req.user.id,
       });
+
       res.json(article);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to generate article content" });
+    } catch (error: any) {
+      console.error('Article generation error:', error);
+      res.status(500).json({ error: error.message || "Failed to generate article" });
     }
   });
 
   app.put("/api/articles/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
 
-    const article = await storage.getArticle(parseInt(req.params.id));
-    if (!article) return res.sendStatus(404);
-    if (article.authorId !== req.user.id) return res.sendStatus(403);
+      const article = await storage.getArticle(parseInt(req.params.id));
+      if (!article) {
+        return res.status(404).json({ error: "Article not found" });
+      }
+      if (article.authorId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
 
-    const parseResult = insertArticleSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json(parseResult.error);
+      const parseResult = insertArticleSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: parseResult.error });
+      }
+
+      const slug = await generateUniqueSlug(parseResult.data.title);
+      const updated = await storage.updateArticle(article.id, {
+        ...parseResult.data,
+        slug,
+      });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
-
-    const slug = await generateUniqueSlug(parseResult.data.title);
-    const updated = await storage.updateArticle(article.id, {
-      ...parseResult.data,
-      slug,
-    });
-    res.json(updated);
   });
 
   app.delete("/api/articles/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
 
-    const article = await storage.getArticle(parseInt(req.params.id));
-    if (!article) return res.sendStatus(404);
-    if (article.authorId !== req.user.id) return res.sendStatus(403);
+      const article = await storage.getArticle(parseInt(req.params.id));
+      if (!article) {
+        return res.status(404).json({ error: "Article not found" });
+      }
+      if (article.authorId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
 
-    await storage.deleteArticle(article.id);
-    res.sendStatus(204);
+      await storage.deleteArticle(article.id);
+      res.status(204).json({});
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   const httpServer = createServer(app);
