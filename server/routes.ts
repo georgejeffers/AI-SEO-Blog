@@ -148,7 +148,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Other article routes (these remain largely the same, just adjusted to the new router structure)
+  // Other article routes
   apiRouter.get("/articles", async (_req, res) => {
     try {
       const articles = await storage.getArticles();
@@ -200,7 +200,6 @@ export function registerRoutes(app: Express): Server {
 
   apiRouter.post("/articles", async (req, res) => {
     try {
-      console.log('Create Article Request Body:', req.body);
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -225,7 +224,6 @@ export function registerRoutes(app: Express): Server {
 
   apiRouter.put("/articles/:id", async (req, res) => {
     try {
-      console.log('Update Article Request Body:', req.body);
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Unauthorized" });
       }
