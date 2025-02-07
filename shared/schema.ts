@@ -6,6 +6,10 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  displayName: text("display_name"),
+  blogTitle: text("blog_title"),
+  blogDescription: text("blog_description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const articles = pgTable("articles", {
@@ -16,12 +20,15 @@ export const articles = pgTable("articles", {
   keywords: text("keywords").array().notNull(),
   seoScore: json("seo_score").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  authorId: serial("author_id").references(() => users.id),
+  authorId: serial("author_id").references(() => users.id).notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+  displayName: true,
+  blogTitle: true,
+  blogDescription: true,
 });
 
 export const insertArticleSchema = createInsertSchema(articles).pick({
@@ -32,6 +39,7 @@ export const insertArticleSchema = createInsertSchema(articles).pick({
   authorId: true,
 });
 
+// Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertArticle = z.infer<typeof insertArticleSchema>;

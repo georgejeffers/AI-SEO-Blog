@@ -80,6 +80,68 @@ export function registerRoutes(app: Express): Server {
     next();
   });
 
+  // Get articles for a specific user's blog
+  apiRouter.get("/users/:username/articles", async (req, res) => {
+    try {
+      const user = await storage.getUserByUsername(req.params.username);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const articles = await storage.getArticlesByAuthor(user.id);
+      const cleanedArticles = articles.map(article => ({
+        ...article,
+        content: cleanContent(article.content),
+        keywords: article.keywords.map(k => cleanContent(k))
+      }));
+      res.json(cleanedArticles);
+    } catch (error: any) {
+      console.error("Error fetching user's articles:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user's blog information
+  apiRouter.get("/users/:username/blog", async (req, res) => {
+    try {
+      const user = await storage.getUserByUsername(req.params.username);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json({
+        username: user.username,
+        displayName: user.displayName,
+        blogTitle: user.blogTitle,
+        blogDescription: user.blogDescription
+      });
+    } catch (error: any) {
+      console.error("Error fetching user's blog info:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update user's blog information
+  apiRouter.put("/users/blog", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { displayName, blogTitle, blogDescription } = req.body;
+      const updatedUser = await storage.updateUser(req.user.id, {
+        displayName,
+        blogTitle,
+        blogDescription
+      });
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Error updating user's blog info:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   apiRouter.post("/articles/ideas", async (req, res) => {
     try {
       console.log('Generate Ideas Request Body:', req.body);

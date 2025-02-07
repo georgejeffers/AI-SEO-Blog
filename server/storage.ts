@@ -11,10 +11,12 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, user: Partial<InsertUser>): Promise<User>;
 
   getArticles(): Promise<Article[]>;
   getArticle(id: number): Promise<Article | undefined>;
   getArticleBySlug(slug: string): Promise<Article | undefined>;
+  getArticlesByAuthor(authorId: number): Promise<Article[]>;
   createArticle(article: InsertArticle & { slug: string }): Promise<Article>;
   updateArticle(id: number, article: Partial<InsertArticle & { slug: string }>): Promise<Article>;
   deleteArticle(id: number): Promise<void>;
@@ -48,6 +50,20 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async updateUser(id: number, updateData: Partial<InsertUser>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, id))
+      .returning();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    return user;
+  }
+
   async getArticles(): Promise<Article[]> {
     return await db.select().from(articles);
   }
@@ -60,6 +76,10 @@ export class DatabaseStorage implements IStorage {
   async getArticleBySlug(slug: string): Promise<Article | undefined> {
     const [article] = await db.select().from(articles).where(eq(articles.slug, slug));
     return article;
+  }
+
+  async getArticlesByAuthor(authorId: number): Promise<Article[]> {
+    return await db.select().from(articles).where(eq(articles.authorId, authorId));
   }
 
   async createArticle(insertArticle: InsertArticle & { slug: string }): Promise<Article> {
