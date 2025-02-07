@@ -60,16 +60,74 @@ async function generateUniqueSlug(title: string): Promise<string> {
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
+  // Error handler middleware
+  app.use((err: any, _req: any, res: any, next: any) => {
+    if (res.headersSent) {
+      return next(err);
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  });
+
   // Set JSON content type for all API routes
   app.use('/api', (req, res, next) => {
     res.type('application/json');
     next();
   });
 
-  // Articles API
+  // Article generation endpoint - place before dynamic routes
+  app.post("/api/articles/generate", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { title, keyword } = req.body;
+      if (!title || !keyword) {
+        return res.status(400).json({ error: "Title and keyword are required" });
+      }
+
+      const generated = await generateArticleContent(title, keyword);
+      if (!generated) {
+        throw new Error("Failed to generate article content");
+      }
+
+      const slug = await generateUniqueSlug(title);
+      const article = await storage.createArticle({
+        title,
+        slug,
+        content: generated.content,
+        keywords: generated.keywords,
+        seoScore: generated.seoScore,
+        authorId: req.user.id,
+      });
+
+      res.json(article);
+    } catch (error: any) {
+      console.error('Article generation error:', error);
+      res.status(500).json({ error: error.message || "Failed to generate article" });
+    }
+  });
+
+  // Articles API - other routes
   app.get("/api/articles", async (_req, res) => {
     try {
       const articles = await storage.getArticles();
+      const cleanedArticles = articles.map(article => ({
+        ...article,
+        content: cleanContent(article.content),
+        keywords: article.keywords.map(k => cleanContent(k))
+      }));
+      res.json(cleanedArticles);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Search endpoint
+  app.get("/api/articles/search/:query", async (req, res) => {
+    try {
+      const articles = await storage.searchArticles(req.params.query);
       const cleanedArticles = articles.map(article => ({
         ...article,
         content: cleanContent(article.content),
@@ -119,50 +177,6 @@ export function registerRoutes(app: Express): Server {
       res.status(201).json(article);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Search endpoint
-  app.get("/api/articles/search/:query", async (req, res) => {
-    try {
-      const articles = await storage.searchArticles(req.params.query);
-      const cleanedArticles = articles.map(article => ({
-        ...article,
-        content: cleanContent(article.content),
-        keywords: article.keywords.map(k => cleanContent(k))
-      }));
-      res.json(cleanedArticles);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/articles/generate", async (req, res) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
-      const { title, keyword } = req.body;
-      if (!title || !keyword) {
-        return res.status(400).json({ error: "Title and keyword are required" });
-      }
-
-      const generated = await generateArticleContent(title, keyword);
-      const slug = await generateUniqueSlug(title);
-      const article = await storage.createArticle({
-        title,
-        slug,
-        content: generated.content,
-        keywords: generated.keywords,
-        seoScore: generated.seoScore,
-        authorId: req.user.id,
-      });
-
-      res.json(article);
-    } catch (error: any) {
-      console.error('Article generation error:', error);
-      res.status(500).json({ error: error.message || "Failed to generate article" });
     }
   });
 
