@@ -4,6 +4,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertArticleSchema } from "@shared/schema";
 import { generateArticleIdeas, generateArticleContent } from "./services/gemini";
+import express from "express";
 
 function cleanContent(content: string): string | string[] {
   // Handle array of strings (like keywords)
@@ -58,25 +59,40 @@ async function generateUniqueSlug(title: string): Promise<string> {
 }
 
 export function registerRoutes(app: Express): Server {
-  setupAuth(app);
+  // Parse JSON bodies
+  app.use(express.json());
 
-  // Error handler middleware
-  app.use((err: any, _req: any, res: any, next: any) => {
-    if (res.headersSent) {
-      return next(err);
-    }
-    console.error(err);
-    res.status(500).json({ error: err.message || 'Internal server error' });
+  // Basic CORS setup
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    next();
   });
 
+  // Set up authentication
+  setupAuth(app);
+
+  // API Routes
+  const apiRouter = express.Router();
+
   // Set JSON content type for all API routes
-  app.use('/api', (req, res, next) => {
+  apiRouter.use((req, res, next) => {
     res.type('application/json');
     next();
   });
 
-  // Article generation endpoint - place before dynamic routes
-  app.post("/api/articles/generate", async (req, res) => {
+  // Error handling middleware for API routes
+  apiRouter.use((err: any, _req: any, res: any, next: any) => {
+    if (res.headersSent) {
+      return next(err);
+    }
+    console.error('API Error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  });
+
+  // Article generation endpoint
+  apiRouter.post("/articles/generate", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -109,8 +125,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Articles API - other routes
-  app.get("/api/articles", async (_req, res) => {
+  // Other article routes
+  apiRouter.get("/articles", async (_req, res) => {
     try {
       const articles = await storage.getArticles();
       const cleanedArticles = articles.map(article => ({
@@ -124,8 +140,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Search endpoint
-  app.get("/api/articles/search/:query", async (req, res) => {
+    apiRouter.get("/articles/search/:query", async (req, res) => {
     try {
       const articles = await storage.searchArticles(req.params.query);
       const cleanedArticles = articles.map(article => ({
@@ -139,7 +154,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.get("/api/articles/:slug", async (req, res) => {
+  apiRouter.get("/articles/:slug", async (req, res) => {
     try {
       const article = await storage.getArticleBySlug(req.params.slug);
       if (!article) {
@@ -157,7 +172,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/articles", async (req, res) => {
+  apiRouter.post("/articles", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -180,7 +195,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.put("/api/articles/:id", async (req, res) => {
+  apiRouter.put("/articles/:id", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -210,7 +225,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.delete("/api/articles/:id", async (req, res) => {
+  apiRouter.delete("/articles/:id", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -230,6 +245,9 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // Mount the API router
+  app.use('/api', apiRouter);
 
   const httpServer = createServer(app);
   return httpServer;
