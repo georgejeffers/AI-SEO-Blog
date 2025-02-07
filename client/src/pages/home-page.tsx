@@ -16,6 +16,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
+import { WritingPreferencesDialog } from "@/components/writing-preferences-dialog";
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
@@ -72,24 +73,26 @@ export default function HomePage() {
       <main className="container mx-auto px-4 py-8">
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <h2 className="text-2xl font-bold flex items-center">
                 <Sparkles className="h-6 w-6 mr-2" />
                 Generate Articles
               </h2>
-              <Button
-                variant="outline"
-                onClick={() => setShowManualForm(!showManualForm)}
-              >
-                {showManualForm ? "Use AI Generator" : "Write Manually"}
-              </Button>
+              <div className="flex gap-2">
+                <WritingPreferencesDialog />
+                <Button
+                  variant="outline"
+                  onClick={() => setShowManualForm(!showManualForm)}
+                >
+                  {showManualForm ? "Use AI Generator" : "Write Manually"}
+                </Button>
+              </div>
             </div>
             {showManualForm ? (
               <ArticleForm />
             ) : (
               <ArticleIdeas
                 onSelectIdea={(title, keyword) => {
-                  // Handle when an idea is selected
                   console.log("Selected:", title, keyword);
                 }}
               />
