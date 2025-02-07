@@ -59,35 +59,41 @@ async function generateUniqueSlug(title: string): Promise<string> {
 }
 
 export function registerRoutes(app: Express): Server {
-  // Parse JSON bodies
-  app.use(express.json());
+  // JSON parsing middleware with error handling
+  app.use(express.json({
+    verify: (req, res, buf) => {
+      try {
+        JSON.parse(buf.toString());
+      } catch (e) {
+        res.status(400).json({ error: 'Invalid JSON' });
+        throw new Error('Invalid JSON');
+      }
+    }
+  }));
 
-  // Basic CORS setup
+  // CORS and content type middleware
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
     next();
   });
 
   // Set up authentication
   setupAuth(app);
 
-  // API Routes
+  // Create API router
   const apiRouter = express.Router();
 
-  // Set JSON content type for all API routes
-  apiRouter.use((req, res, next) => {
-    res.type('application/json');
-    next();
-  });
-
-  // Error handling middleware for API routes
+  // API error handling middleware
   apiRouter.use((err: any, _req: any, res: any, next: any) => {
+    console.error('API Error:', err);
     if (res.headersSent) {
       return next(err);
     }
-    console.error('API Error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
@@ -125,7 +131,14 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Other article routes
+  // Mount API router first, before any other middleware
+  app.use('/api', (req, res, next) => {
+    res.type('application/json');
+    next();
+  }, apiRouter);
+
+
+  // Other article routes (these remain largely the same, just adjusted to the new router structure)
   apiRouter.get("/articles", async (_req, res) => {
     try {
       const articles = await storage.getArticles();
@@ -140,7 +153,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-    apiRouter.get("/articles/search/:query", async (req, res) => {
+  apiRouter.get("/articles/search/:query", async (req, res) => {
     try {
       const articles = await storage.searchArticles(req.params.query);
       const cleanedArticles = articles.map(article => ({
@@ -245,9 +258,6 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ error: error.message });
     }
   });
-
-  // Mount the API router
-  app.use('/api', apiRouter);
 
   const httpServer = createServer(app);
   return httpServer;
