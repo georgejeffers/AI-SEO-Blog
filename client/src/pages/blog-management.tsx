@@ -3,13 +3,14 @@ import { Article } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
-import { Edit2, Trash2 } from "lucide-react";
+import { Edit2, Trash2, ExternalLink } from "lucide-react";
 import EditArticleDialog from "@/components/edit-article-dialog";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
+import { Link } from "wouter";
 
 export default function BlogManagementPage() {
   const { user } = useAuth();
@@ -44,6 +45,12 @@ export default function BlogManagementPage() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold">Blog Management</h1>
+        <Link href={`/blog/${user?.username}`}>
+          <Button className="flex items-center gap-2">
+            <ExternalLink className="h-4 w-4" />
+            View Your Blog
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-6">
