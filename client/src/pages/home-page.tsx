@@ -13,6 +13,7 @@ import {
   BookOpen,
   Sparkles,
   Settings,
+  ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -39,9 +40,17 @@ export default function HomePage() {
             <Link href="/blog">
               <Button variant="ghost">
                 <BookOpen className="h-4 w-4 mr-2" />
-                View Blog
+                View All Blogs
               </Button>
             </Link>
+            {user && (
+              <Link href={`/blog/${user.username}`}>
+                <Button variant="ghost">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Your Blog
+                </Button>
+              </Link>
+            )}
             <Link href="/blog/manage">
               <Button variant="ghost">
                 <Settings className="h-4 w-4 mr-2" />
