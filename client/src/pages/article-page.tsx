@@ -12,7 +12,7 @@ export default function ArticlePage({ slug }: ArticlePageProps) {
   const { data: article, isLoading } = useQuery<Article>({
     queryKey: ["/api/articles", slug],
     queryFn: async () => {
-      const response = await fetch(`/api/articles/${slug}`);
+      const response = await fetch(`/api/articles/${encodeURIComponent(slug)}`);
       if (!response.ok) throw new Error("Article not found");
       return response.json();
     },
