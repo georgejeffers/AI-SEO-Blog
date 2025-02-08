@@ -17,34 +17,33 @@ function validatePreferences(preferences?: WritingPreferences): boolean {
 
 export async function generateArticleIdeas(keyword: string, preferences?: WritingPreferences): Promise<string[]> {
   try {
-    let systemPrompt = `You are an expert content writer specializing in creating promotional content that drives engagement.`;
-
-    // If max explicitness, make the product the absolute focus
-    if (validatePreferences(preferences) && preferences.explicitness === 5) {
-      const { context } = preferences;
-      systemPrompt += `\n\nCRITICAL REQUIREMENTS:
-1. Every title MUST start with "${context}" or prominently feature it
-2. Make it clear that ${context} is THE solution for ${keyword}
-3. Position ${context} as the industry-leading tool
-4. Emphasize the unique benefits of ${context}`;
-    }
+    let systemPrompt = `You are an expert content writer specializing in creating SEO-optimized promotional content.`;
 
     let prompt = `Generate 5 unique and engaging article titles about "${keyword}". Each title must be SEO-friendly and compelling.`;
 
     if (validatePreferences(preferences)) {
       const { context, explicitness } = preferences;
+
+      // At maximum explicitness, force the product name into every title
       if (explicitness >= 4) {
-        prompt += `\n\nABSOLUTE REQUIREMENTS:
-- Each title MUST prominently feature "${context}"
-- Position "${context}" as the primary solution
-- Include key benefits of "${context}" where possible
-- Make it clear that "${context}" is essential for success`;
-      } else if (explicitness >= 3) {
-        prompt += `\nInclude references to ${context} in the titles where appropriate.`;
+        systemPrompt += `\n\nABSOLUTE REQUIREMENTS:
+1. Every single title MUST start with "${context}" or prominently include it
+2. Position "${context}" as THE essential solution for ${keyword}
+3. Emphasize that "${context}" is the leading tool in this space
+4. Include specific benefits of "${context}" in titles where possible`;
+
+        prompt += `\n\nCRITICAL TITLE REQUIREMENTS:
+- Every title MUST prominently mention "${context}"
+- Make "${context}" the central focus
+- Show how "${context}" solves problems related to ${keyword}
+- Emphasize "${context}" as the industry-leading solution`;
       }
     }
 
-    prompt += `\n\nFormat each title on a new line with a number:
+    prompt += `\n\nFormat Requirements:
+- List each title on a new line
+- Start each line with a number and period
+- Example:
 1. First Title
 2. Second Title`;
 
@@ -57,13 +56,23 @@ export async function generateArticleIdeas(keyword: string, preferences?: Writin
       temperature: 0.7,
     });
 
-    return response.choices[0].message.content
+    const titles = response.choices[0].message.content
       ?.split('\n')
       .map(line => line.trim())
       .filter(line => line.match(/^\d+\./))
       .map(line => line.replace(/^\d+\.\s*/, ''))
       .filter(line => line.length > 0)
       .slice(0, 5) || [];
+
+    // Validate that titles include the context when required
+    if (validatePreferences(preferences) && preferences.explicitness >= 4) {
+      const { context } = preferences;
+      if (!titles.every(title => title.toLowerCase().includes(context.toLowerCase()))) {
+        throw new Error('Generated titles did not meet promotional requirements');
+      }
+    }
+
+    return titles;
   } catch (error) {
     console.error('Error generating article ideas:', error);
     throw new Error('Failed to generate article ideas');
@@ -83,40 +92,69 @@ export async function generateArticleContent(
     let systemPrompt = `You are an expert content writer who creates engaging, well-structured articles.
 
 CRITICAL FORMATTING REQUIREMENTS:
-1. Use proper markdown spacing:
-   - Start with "# [Title]"
-   - Add TWO blank lines after the title
-   - Use "### [Section Name]" for sections
-   - Add TWO blank lines before each section
-   - Add ONE blank line after each section header
-   - Add ONE blank line between paragraphs
-2. Never join sentences or sections without proper spacing
-3. Every section must be properly separated`;
+1. Proper Title Format:
+   # [Your Title Here]
+   [TWO blank lines after title]
 
-    if (validatePreferences(preferences) && preferences.explicitness >= 4) {
-      const { context } = preferences;
-      systemPrompt += `\n\nCRITICAL CONTENT REQUIREMENTS:
-1. The entire article MUST revolve around ${context}
-2. Start by introducing ${context} as THE solution
-3. Every section MUST showcase ${context}'s features and benefits
-4. Use specific examples of how ${context} solves problems
-5. Include testimonials or use cases that demonstrate ${context}'s effectiveness
-6. End with a strong call-to-action to use ${context}
-7. Position ${context} as the industry-leading solution throughout`;
-    }
+2. Introduction Format:
+   [Introduction text without header]
+   [TWO blank lines after introduction]
 
-    let prompt = `Write a comprehensive article about "${keyword}" with the title "${title}".`;
+3. Section Headers Format:
+   ### [Section Name]
+   [ONE blank line]
+   [Section content]
+   [TWO blank lines before next section]
+
+4. Paragraph Spacing:
+   - ONE blank line between paragraphs
+   - TWO blank lines between major sections
+   - NO running text together
+
+EXAMPLE FORMAT:
+# Title
+
+[TWO BLANK LINES HERE]
+Introduction paragraph one.
+
+Introduction paragraph two.
+
+
+### First Section
+
+First section paragraph one.
+
+First section paragraph two.
+
+
+### Second Section
+
+Second section content.`;
+
+    let contentPrompt = `Write a comprehensive article about "${keyword}" with the title "${title}".`;
 
     if (validatePreferences(preferences)) {
       const { context, explicitness } = preferences;
-      if (explicitness === 5) {
-        prompt += `\n\nABSOLUTE REQUIREMENTS:
-1. Make ${context} the central focus of EVERY section
-2. Begin by positioning ${context} as the ultimate solution
-3. Describe key features: ${context}'s autobuy and inventory management
-4. Explain how ${context} revolutionizes ${keyword}
-5. Include specific benefits and success stories
-6. End with a compelling call-to-action to try ${context}`;
+
+      if (explicitness >= 4) {
+        systemPrompt += `\n\nCRITICAL CONTENT REQUIREMENTS:
+1. EVERY major section must prominently feature ${context}
+2. Introduction MUST establish ${context} as THE solution
+3. Each section MUST showcase specific ${context} features:
+   - Autobuy capabilities
+   - Inventory management
+   - Competitive advantages
+4. Use real examples of ${context}'s effectiveness
+5. End with a strong call-to-action to use ${context}
+6. Position ${context} as the industry leader throughout`;
+
+        contentPrompt += `\n\nABSOLUTE REQUIREMENTS:
+1. Start by introducing ${context} as the ultimate solution for ${keyword}
+2. Every section must demonstrate how ${context} solves specific problems
+3. Include actual features and benefits of ${context}
+4. Compare ${context}'s capabilities to manual methods
+5. End with a clear call-to-action to try ${context}
+6. Make ${context} the central focus of the entire article`;
       }
     }
 
@@ -124,16 +162,21 @@ CRITICAL FORMATTING REQUIREMENTS:
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: prompt }
+        { role: "user", content: contentPrompt }
       ],
       temperature: 0.7,
     });
 
     const content = response.choices[0].message.content?.trim() || '';
 
-    // Generate SEO keywords with strong product focus
+    // Validate content formatting
+    if (!content.startsWith('# ') || !content.includes('\n\n')) {
+      throw new Error('Generated content does not meet formatting requirements');
+    }
+
+    // Generate SEO keywords with product focus
     const keywordsPrompt = validatePreferences(preferences) && preferences.explicitness >= 4
-      ? `Generate 5 SEO keywords for an article about "${keyword}" that prominently features ${preferences.context}. The keywords should help drive traffic specifically to content about ${preferences.context}.`
+      ? `Generate 5 SEO keywords for an article about "${keyword}" that prominently features ${preferences.context}. Focus on driving traffic specifically to content about ${preferences.context}.`
       : `Generate 5 SEO keywords for an article about "${keyword}"${preferences?.context ? ` that mentions ${preferences.context}` : ''}.`;
 
     const keywordsResponse = await openai.chat.completions.create({
@@ -156,6 +199,15 @@ CRITICAL FORMATTING REQUIREMENTS:
 
     if (!content || !keywords.length) {
       throw new Error('Generated content is invalid');
+    }
+
+    // Validate promotional content when required
+    if (validatePreferences(preferences) && preferences.explicitness >= 4) {
+      const { context } = preferences;
+      const contextMentions = (content.match(new RegExp(context, 'gi')) || []).length;
+      if (contextMentions < 5) {
+        throw new Error('Generated content does not meet promotional requirements');
+      }
     }
 
     return {
