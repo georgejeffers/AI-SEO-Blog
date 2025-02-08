@@ -37,7 +37,7 @@ export default function ArticlePage({ slug }: ArticlePageProps) {
   return (
     <div className="container mx-auto py-8 px-4">
       <article className="prose prose-lg dark:prose-invert mx-auto">
-        <h1>{article.title}</h1>
+        <h1 className="mb-4">{article.title}</h1>
         <div className="flex flex-wrap gap-2 my-4">
           {article.keywords.map((keyword, i) => (
             <Badge key={i} variant="secondary">
@@ -48,9 +48,15 @@ export default function ArticlePage({ slug }: ArticlePageProps) {
         <div className="text-sm text-muted-foreground mb-8">
           Published on {format(new Date(article.createdAt), "MMMM d, yyyy")}
         </div>
-        {article.content.split('\n').map((paragraph, index) => (
-          <p key={index}>{paragraph}</p>
-        ))}
+        <div className="space-y-4">
+          {article.content.split('\n\n').map((paragraph, index) => (
+            paragraph.trim() && (
+              <p key={index} className="whitespace-pre-line">
+                {paragraph}
+              </p>
+            )
+          ))}
+        </div>
       </article>
     </div>
   );

@@ -26,15 +26,16 @@ export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
   const [ideas, setIdeas] = useState<IdeaItem[]>([]);
   const { toast } = useToast();
 
-  // Get writing preferences from localStorage
   const getWritingPreferences = (): WritingPreferences | undefined => {
     const saved = localStorage.getItem("writingPreferences");
+    console.log("Retrieved preferences:", saved);
     return saved ? JSON.parse(saved) : undefined;
   };
 
   const generateIdeas = useMutation({
     mutationFn: async (keyword: string) => {
       const preferences = getWritingPreferences();
+      console.log("Using preferences for generation:", preferences);
       const res = await apiRequest("POST", "/api/articles/ideas", { 
         keyword,
         preferences 
@@ -60,6 +61,7 @@ export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
   const generateArticle = useMutation({
     mutationFn: async ({ title, keyword }: { title: string; keyword: string }) => {
       const preferences = getWritingPreferences();
+      console.log("Using preferences for article generation:", preferences);
       const res = await apiRequest("POST", "/api/articles/generate", {
         title,
         keyword,
