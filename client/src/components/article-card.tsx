@@ -10,7 +10,7 @@ interface ArticleCardProps {
 
 export default function ArticleCard({ article }: ArticleCardProps) {
   return (
-    <Link href={`/blog/${article.slug}`}>
+    <Link href={`/blog/article/${article.slug}`}>
       <Card className="cursor-pointer hover:bg-accent/50 transition-colors">
         <CardHeader>
           <CardTitle>{article.title}</CardTitle>
