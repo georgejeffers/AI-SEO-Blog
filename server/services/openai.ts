@@ -30,9 +30,16 @@ export async function generateArticleIdeas(keyword: string, preferences?: Writin
     let systemPrompt = "You are an expert content writer who creates SEO-optimized article titles.";
 
     if (preferences?.context) {
-      const explicitnessGuide = getExplicitnessInstructions(preferences.explicitness || 3, preferences.context);
-      systemPrompt += `\n${explicitnessGuide}\nGenerate titles that align with this guidance. For maximum explicitness, ensure the titles directly showcase the promoted solution.`;
+      const contextGuidance = preferences.explicitness >= 4 
+        ? `Ensure the titles prominently feature or relate to: ${preferences.context}`
+        : `Consider subtly incorporating themes related to: ${preferences.context}`;
+      systemPrompt += `\n${contextGuidance}`;
     }
+
+    systemPrompt += `\nFormat each title on a new line, starting with a number, like this:
+    1. First Title
+    2. Second Title
+    etc.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -43,7 +50,7 @@ export async function generateArticleIdeas(keyword: string, preferences?: Writin
         },
         {
           role: "user",
-          content: `Generate 5 unique and engaging article titles about "${keyword}". Each title should be SEO-friendly and interesting.${
+          content: `Generate 5 unique and engaging article titles about "${keyword}". Make each title SEO-friendly and interesting.${
             preferences?.explicitness === 5 
               ? `\nThe titles MUST prominently feature ${preferences.context}. Make it clear that this solution is central to the topic.` 
               : ''
@@ -53,12 +60,13 @@ export async function generateArticleIdeas(keyword: string, preferences?: Writin
       temperature: 0.7,
     });
 
-    const titles = response.choices[0].message.content
+    return response.choices[0].message.content
       ?.split('\n')
-      .filter(line => line.trim())
+      .map(line => line.trim())
+      .filter(line => line.match(/^\d+\./))
+      .map(line => line.replace(/^\d+\.\s*/, ''))
+      .filter(line => line.length > 0)
       .slice(0, 5) || [];
-
-    return titles;
   } catch (error) {
     console.error('Error generating article ideas:', error);
     throw new Error('Failed to generate article ideas');
@@ -77,20 +85,21 @@ export async function generateArticleContent(
   try {
     let systemPrompt = `You are an expert content writer who creates engaging, well-structured articles.`;
 
-    if (preferences?.context) {
-      const explicitnessGuide = getExplicitnessInstructions(preferences.explicitness || 3, preferences.context);
-      systemPrompt += `\n${explicitnessGuide}`;
-
-      // Additional context-specific instructions for maximum explicitness
-      if (preferences.explicitness === 5) {
-        systemPrompt += `\n\nCRITICAL INSTRUCTIONS:
-        1. This article MUST be entirely focused on ${preferences.context}
-        2. Every section should demonstrate how ${preferences.context} solves problems or provides value
-        3. Use specific features and benefits from ${preferences.context} throughout the content
-        4. The introduction should immediately establish ${preferences.context} as the primary solution
-        5. Conclude with a strong call-to-action about using ${preferences.context}`;
-      }
+    if (preferences?.context && preferences.explicitness) {
+      const contextGuidance = preferences.explicitness >= 4 
+        ? `Ensure the content prominently features and revolves around: ${preferences.context}`
+        : `Consider incorporating themes related to: ${preferences.context}`;
+      systemPrompt += `\n${contextGuidance}`;
     }
+
+    systemPrompt += `\nFormat your content with proper spacing:
+    1. Use "# Title" for the main title
+    2. Add TWO blank lines after the title
+    3. Start with an introduction (no header needed)
+    4. Use "### Section Name" for section headers
+    5. Add TWO blank lines before each section header
+    6. Add ONE blank line after each section header
+    7. Add ONE blank line between paragraphs`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -103,21 +112,40 @@ export async function generateArticleContent(
           role: "user",
           content: `Write a comprehensive blog article about "${keyword}" with the title "${title}".
 
-          Requirements:
-          1. Use clear section headings (use markdown style: ### for headers)
-          2. Include proper paragraph breaks (use double newlines)
-          3. Use only English characters
-          4. Write in a professional tone
-          5. Format with proper spacing between sections
-          ${preferences?.explicitness === 5 
-            ? '6. Every section MUST discuss and promote the main solution extensively\n7. Include specific features and benefits in detail\n8. End with a compelling call-to-action' 
-            : preferences?.explicitness >= 4 
-              ? '6. Ensure the promotional content is prominent and clearly visible' 
-              : preferences?.explicitness <= 2 
-                ? '6. Keep promotional mentions subtle and naturally integrated' 
-                : ''}
+Requirements:
+1. Use markdown style headings (### for section headers)
+2. CRITICAL: Add TWO blank lines between:
+   - The title and introduction
+   - Each section header
+   - Each paragraph
+3. Use only English characters (no foreign characters)
+4. Write in a professional tone
+${preferences?.explicitness === 5 
+  ? `5. Every section MUST discuss ${preferences.context} extensively
+6. Include specific features and benefits in detail
+7. End with a compelling call-to-action
+8. The content should revolve entirely around ${preferences.context} as the solution` 
+  : preferences?.explicitness >= 4 
+    ? '5. Ensure the promotional content is prominent and clearly visible' 
+    : preferences?.explicitness <= 2 
+      ? '5. Keep promotional mentions subtle and naturally integrated' 
+      : ''}
 
-          The article should be informative and engaging while following the writing style guidance provided.`
+Format example:
+# ${title}
+
+
+[Introduction paragraph]
+
+
+### First Section Header
+
+[First section content]
+
+
+### Second Section Header
+
+[Second section content]`
         }
       ],
       temperature: 0.7,
