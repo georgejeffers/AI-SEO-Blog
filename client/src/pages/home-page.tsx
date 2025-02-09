@@ -71,14 +71,14 @@ export default function HomePage() {
       </nav>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-8 lg:grid-cols-2">
           <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-2xl font-bold flex items-center">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <h2 className="text-2xl font-bold flex items-center whitespace-nowrap">
                 <Sparkles className="h-6 w-6 mr-2" />
                 Generate Articles
               </h2>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <WritingPreferencesDialog />
                 <Button
                   variant="outline"
