@@ -17,8 +17,9 @@ interface IdeaItem {
 }
 
 interface WritingPreferences {
-  context: string;
-  explicitness: number;
+  context?: string;
+  explicitness?: number;
+  userPreferences?: string;
 }
 
 export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
@@ -28,14 +29,24 @@ export default function ArticleIdeas({ onSelectIdea }: ArticleIdeasProps) {
 
   const getWritingPreferences = (): WritingPreferences | undefined => {
     const saved = localStorage.getItem("writingPreferences");
-    console.log("Retrieved preferences:", saved);
-    return saved ? JSON.parse(saved) : undefined;
+    if (!saved) return undefined;
+    
+    const prefs = JSON.parse(saved);
+    console.log("Retrieved writing preferences:", prefs);
+    
+    // Validate preferences
+    if (!prefs.context?.trim() || !prefs.explicitness) {
+      console.log("Invalid preferences found:", prefs);
+      return undefined;
+    }
+    
+    return prefs;
   };
 
   const generateIdeas = useMutation({
     mutationFn: async (keyword: string) => {
       const preferences = getWritingPreferences();
-      console.log("Using preferences for generation:", preferences);
+      console.log("Sending preferences to API:", preferences);
       const res = await apiRequest("POST", "/api/articles/ideas", { 
         keyword,
         preferences 

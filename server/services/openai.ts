@@ -9,34 +9,91 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 interface WritingPreferences {
   context?: string;
   explicitness?: number;
+  userPreferences?: string;
 }
 
-function validatePreferences(preferences?: WritingPreferences): boolean {
-  return !!(preferences?.context && typeof preferences.explicitness === 'number' && preferences.explicitness >= 1 && preferences.explicitness <= 5);
+const explicitnessPrompts = {
+  1: "Lightly consider the user's preferences but primarily use your expertise to generate titles.",
+  2: "Incorporate the user's preferences while maintaining creative freedom.",
+  3: "Balance user preferences with your own expertise for an optimized output.",
+  4: "Prioritize the user's preferences while ensuring coherence and SEO effectiveness.",
+  5: "Strictly follow the user's preferences—use them directly in the article titles."
+} as const;
+
+function validatePreferences(preferences?: WritingPreferences): preferences is Required<WritingPreferences> {
+  if (!preferences) return false;
+  return (
+    typeof preferences.explicitness === 'number' &&
+    preferences.explicitness >= 1 &&
+    preferences.explicitness <= 5 &&
+    typeof preferences.context === 'string' &&
+    preferences.context.length > 0
+  );
 }
 
 export async function generateArticleIdeas(keyword: string, preferences?: WritingPreferences): Promise<string[]> {
   try {
-    let systemPrompt = `You are an expert content writer specializing in creating SEO-optimized promotional content.`;
+    console.log('Generating ideas with preferences:', preferences);
+
+    let systemPrompt = `You are an expert content writer specializing in creating SEO-optimized promotional content.
+
+TITLE REQUIREMENTS:
+- Each title must be unique and engaging
+- Titles should be SEO-friendly
+- Use proper capitalization
+- Include relevant keywords
+- Keep titles concise but descriptive`;
 
     let prompt = `Generate 5 unique and engaging article titles about "${keyword}". Each title must be SEO-friendly and compelling.`;
 
-    if (validatePreferences(preferences)) {
-      const { context, explicitness } = preferences;
+    if (preferences?.explicitness && preferences.explicitness >= 1) {
+      // Add context-based requirements based on explicitness level
+      if (preferences.context) {
+        const contextStr = preferences.context.trim();
+        const explicitnessLevel = preferences.explicitness;
+        
+        console.log(`Adding promotional requirements (Level ${explicitnessLevel}) for context: ${contextStr}`);
+        
+        systemPrompt += `\n\nPROMOTIONAL REQUIREMENTS (Level ${explicitnessLevel}/5):`;
+        
+        if (explicitnessLevel >= 4) {
+          systemPrompt += `\nCRITICAL: Every title MUST prominently feature "${contextStr}":
+1. MUST start titles with "${contextStr}" or make it the main focus
+2. MUST position "${contextStr}" as THE essential solution
+3. MUST emphasize "${contextStr}" as the leading tool
+4. MUST highlight specific benefits of "${contextStr}"`;
+          
+          prompt += `\n\nABSOLUTE REQUIREMENTS:
+- Every single title MUST start with or prominently include "${contextStr}"
+- Make "${contextStr}" the central focus of each title
+- Show how "${contextStr}" solves problems related to ${keyword}
+- Position "${contextStr}" as the industry-leading solution
+- No title should be without "${contextStr}"`;
+        } else if (explicitnessLevel >= 2) {
+          systemPrompt += `\nNaturally incorporate "${contextStr}" into titles:
+1. Include "${contextStr}" where it fits naturally
+2. Present it as a solution when relevant
+3. Highlight its benefits where appropriate`;
+          
+          prompt += `\n\nGUIDELINES:
+- Include "${contextStr}" in some titles where relevant
+- Present it as one of the solutions
+- Highlight its benefits when appropriate`;
+        }
+      }
 
-      // At maximum explicitness, force the product name into every title
-      if (explicitness >= 4) {
-        systemPrompt += `\n\nABSOLUTE REQUIREMENTS:
-1. Every single title MUST start with "${context}" or prominently include it
-2. Position "${context}" as THE essential solution for ${keyword}
-3. Emphasize that "${context}" is the leading tool in this space
-4. Include specific benefits of "${context}" in titles where possible`;
-
-        prompt += `\n\nCRITICAL TITLE REQUIREMENTS:
-- Every title MUST prominently mention "${context}"
-- Make "${context}" the central focus
-- Show how "${context}" solves problems related to ${keyword}
-- Emphasize "${context}" as the industry-leading solution`;
+      // Add user preferences if provided
+      if (preferences.userPreferences) {
+        const features = preferences.userPreferences
+          .split(',')
+          .map(f => f.trim())
+          .filter(f => f.length > 0);
+        
+        if (features.length > 0) {
+          console.log('Adding user preferences:', features);
+          prompt += `\n\nKEY FEATURES TO HIGHLIGHT:
+${features.map(f => `- ${f}`).join('\n')}`;
+        }
       }
     }
 
@@ -44,11 +101,13 @@ export async function generateArticleIdeas(keyword: string, preferences?: Writin
 - List each title on a new line
 - Start each line with a number and period
 - Example:
-1. First Title
-2. Second Title`;
+1. First Title Here
+2. Second Title Here`;
+
+    console.log('Sending prompt to OpenAI:', { systemPrompt, prompt });
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt }
@@ -64,12 +123,61 @@ export async function generateArticleIdeas(keyword: string, preferences?: Writin
       .filter(line => line.length > 0)
       .slice(0, 5) || [];
 
+    console.log('Generated titles:', titles);
+
     // Validate that titles include the context when required
-    if (validatePreferences(preferences) && preferences.explicitness >= 4) {
-      const { context } = preferences;
-      if (!titles.every(title => title.toLowerCase().includes(context.toLowerCase()))) {
-        throw new Error('Generated titles did not meet promotional requirements');
+    if (preferences?.explicitness && preferences.explicitness >= 4 && preferences.context) {
+      const contextStr = preferences.context.trim().toLowerCase();
+      const validTitles = titles.filter(title => {
+        const titleLower = title.toLowerCase();
+        // For high explicitness, require the context to be at the start or prominently featured
+        if (preferences.explicitness === 5) {
+          return titleLower.startsWith(contextStr) || 
+                 titleLower.includes(` ${contextStr} `) ||
+                 titleLower.includes(`${contextStr}:`);
+        }
+        return titleLower.includes(contextStr);
+      });
+
+      console.log('Valid titles after context check:', validTitles);
+
+      if (validTitles.length < titles.length) {
+        console.log('Retrying with stronger emphasis on context');
+        // Retry with stronger emphasis if titles don't meet requirements
+        systemPrompt += `\n\nWARNING: Previous attempt failed. EVERY title MUST start with or prominently feature "${preferences.context}". No exceptions.`;
+        prompt += `\n\nCRITICAL: Each title MUST begin with or prominently feature "${preferences.context}". This is a strict requirement. Do not generate any titles without "${preferences.context}".`;
+        
+        const retryResponse = await openai.chat.completions.create({
+          model: "gpt-4",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+        });
+
+        const retryTitles = retryResponse.choices[0].message.content
+          ?.split('\n')
+          .map(line => line.trim())
+          .filter(line => line.match(/^\d+\./))
+          .map(line => line.replace(/^\d+\.\s*/, ''))
+          .filter(line => line.length > 0)
+          .slice(0, 5) || [];
+
+        console.log('Retry titles:', retryTitles);
+
+        // Verify retry results
+        if (!retryTitles.every(title => 
+          title.toLowerCase().includes(contextStr)
+        )) {
+          console.error('Retry failed to meet promotional requirements');
+          throw new Error('Generated titles did not meet promotional requirements');
+        }
+        
+        return retryTitles;
       }
+
+      return validTitles;
     }
 
     return titles;
@@ -92,74 +200,66 @@ export async function generateArticleContent(
     let systemPrompt = `You are an expert content writer who creates engaging, well-structured articles.
 
 CRITICAL FORMATTING REQUIREMENTS:
-1. Proper Title Format:
-   # [Your Title Here]
-   [TWO blank lines after title]
+1. Title Format:
+   # [Title]
+   [TWO blank lines after]
 
 2. Introduction Format:
-   [Introduction text without header]
-   [TWO blank lines after introduction]
+   - Must have proper spacing after periods (". ")
+   - Must have proper paragraph breaks
+   - No header needed for introduction
+   [TWO blank lines after]
 
-3. Section Headers Format:
+3. Section Headers:
    ### [Section Name]
-   [ONE blank line]
-   [Section content]
-   [TWO blank lines before next section]
+   [ONE blank line after]
 
-4. Paragraph Spacing:
+4. Paragraph Rules:
+   - Always add a space after periods, commas, and punctuation
    - ONE blank line between paragraphs
-   - TWO blank lines between major sections
-   - NO running text together
+   - TWO blank lines between sections
+   - Proper sentence spacing throughout
+   - No run-on sentences or cramped text
 
-EXAMPLE FORMAT:
-# Title
+5. Content Structure:
+   - Clear section breaks
+   - Consistent formatting
+   - Proper list formatting with line breaks
+   - Clean, readable layout`;
 
-[TWO BLANK LINES HERE]
-Introduction paragraph one.
+    let contentPrompt = `Write a comprehensive article about "${keyword}" with the title "${title}".
 
-Introduction paragraph two.
+FORMATTING REQUIREMENTS:
+1. Add a space after EVERY period, comma, and punctuation mark
+2. Use proper paragraph breaks with blank lines
+3. Ensure clean section breaks with two blank lines
+4. Format lists with proper spacing`;
 
+    if (preferences?.explicitness && preferences.explicitness >= 1) {
+      // Add context-based requirements based on explicitness level
+      if (preferences.context) {
+        systemPrompt += `\n\nPROMOTIONAL REQUIREMENTS (Level ${preferences.explicitness}/5):
+${preferences.explicitness >= 4 ? 'CRITICAL: ' : ''}Include "${preferences.context}" in the following ways:
+1. ${preferences.explicitness >= 4 ? 'Must prominently feature' : 'Naturally mention'} in the introduction
+2. ${preferences.explicitness >= 4 ? 'Dedicate entire sections to' : 'Include references to'} its benefits
+3. ${preferences.explicitness >= 4 ? 'Position as the industry leader' : 'Highlight as a solution'}
+4. ${preferences.explicitness >= 4 ? 'End with a strong call-to-action' : 'Suggest as an option'} to use it`;
 
-### First Section
+        contentPrompt += `\n\nPROMOTIONAL FOCUS:
+1. ${preferences.explicitness >= 4 ? 'Heavily emphasize' : 'Include'} "${preferences.context}" throughout the content
+2. ${preferences.explicitness >= 4 ? 'Make it the central solution' : 'Present it as a solution'}
+3. ${preferences.explicitness >= 4 ? 'Highlight its superiority' : 'Mention its benefits'}`;
+      }
 
-First section paragraph one.
-
-First section paragraph two.
-
-
-### Second Section
-
-Second section content.`;
-
-    let contentPrompt = `Write a comprehensive article about "${keyword}" with the title "${title}".`;
-
-    if (validatePreferences(preferences)) {
-      const { context, explicitness } = preferences;
-
-      if (explicitness >= 4) {
-        systemPrompt += `\n\nCRITICAL CONTENT REQUIREMENTS:
-1. EVERY major section must prominently feature ${context}
-2. Introduction MUST establish ${context} as THE solution
-3. Each section MUST showcase specific ${context} features:
-   - Autobuy capabilities
-   - Inventory management
-   - Competitive advantages
-4. Use real examples of ${context}'s effectiveness
-5. End with a strong call-to-action to use ${context}
-6. Position ${context} as the industry leader throughout`;
-
-        contentPrompt += `\n\nABSOLUTE REQUIREMENTS:
-1. Start by introducing ${context} as the ultimate solution for ${keyword}
-2. Every section must demonstrate how ${context} solves specific problems
-3. Include actual features and benefits of ${context}
-4. Compare ${context}'s capabilities to manual methods
-5. End with a clear call-to-action to try ${context}
-6. Make ${context} the central focus of the entire article`;
+      // Add user preferences if provided
+      if (preferences.userPreferences) {
+        contentPrompt += `\n\nKEY POINTS TO EMPHASIZE:
+${preferences.userPreferences.split(',').map(pref => `- ${pref.trim()}`).join('\n')}`;
       }
     }
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: contentPrompt }
@@ -167,11 +267,91 @@ Second section content.`;
       temperature: 0.7,
     });
 
-    const content = response.choices[0].message.content?.trim() || '';
+    let content = response.choices[0].message.content?.trim() || '';
+
+    // Validate promotional content when required
+    if (preferences?.explicitness && preferences.explicitness >= 4 && preferences.context) {
+      const contextStr = preferences.context.trim();
+      const contextMentions = (content.match(new RegExp(contextStr, 'gi')) || []).length;
+      const hasContextInIntro = content.split('\n\n')[1]?.toLowerCase().includes(contextStr.toLowerCase());
+      
+      if (contextMentions < 5 || !hasContextInIntro) {
+        // Retry with stronger emphasis
+        systemPrompt += `\n\nWARNING: Previous attempt failed to properly promote "${contextStr}".
+CRITICAL REQUIREMENTS:
+1. MUST mention "${contextStr}" at least 5 times
+2. MUST introduce "${contextStr}" in the first paragraph
+3. MUST have dedicated sections about "${contextStr}"
+4. MUST end with a strong call-to-action for "${contextStr}"`;
+
+        const retryResponse = await openai.chat.completions.create({
+          model: "gpt-4",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: contentPrompt }
+          ],
+          temperature: 0.7,
+        });
+
+        content = retryResponse.choices[0].message.content?.trim() || '';
+        
+        // Verify retry results
+        const retryMentions = (content.match(new RegExp(contextStr, 'gi')) || []).length;
+        const retryHasContextInIntro = content.split('\n\n')[1]?.toLowerCase().includes(contextStr.toLowerCase());
+        
+        if (retryMentions < 5 || !retryHasContextInIntro) {
+          throw new Error('Generated content does not meet promotional requirements');
+        }
+      }
+    }
+
+    // Post-process content to ensure proper formatting
+    content = content
+      // Fix title formatting
+      .replace(/^#\s*([^\n]+)(?:\n+)?/, '# $1\n\n')
+      // Fix section headers
+      .replace(/###\s*([^\n]+)(?:\n+)?/g, '### $1\n')
+      // Ensure proper spacing after punctuation
+      .replace(/([.!?])([A-Z])/g, '$1 $2')
+      .replace(/([.!?])(\s+)([A-Z])/g, '$1 $3')
+      .replace(/([,;:])([a-zA-Z])/g, '$1 $2')
+      // Fix list formatting
+      .replace(/^(-|\d+\.)\s*/gm, '$1 ')
+      // Ensure proper paragraph spacing
+      .replace(/\n{3,}/g, '\n\n')
+      // Fix spacing after periods within sentences
+      .replace(/(\w+\.)(\w+)/g, '$1 $2')
+      // Ensure proper spacing around list items
+      .replace(/(\n- .+)\n(?![\n-])/g, '$1\n\n')
+      .replace(/(\n\d+\. .+)\n(?![\n\d])/g, '$1\n\n')
+      // Clean up any remaining formatting issues
+      .replace(/[ \t]+$/gm, '')  // Remove trailing spaces
+      .replace(/^\s+$/gm, '')    // Remove empty lines with spaces
+      .replace(/\n{3,}/g, '\n\n'); // Final cleanup of multiple newlines
+
+    // Add proper spacing between sections
+    content = content
+      .split('\n\n')
+      .map(section => {
+        if (section.startsWith('### ')) {
+          return `\n\n${section}`;
+        }
+        return section;
+      })
+      .join('\n\n')
+      .replace(/\n{4,}/g, '\n\n\n');  // Final cleanup of section spacing
 
     // Validate content formatting
     if (!content.startsWith('# ') || !content.includes('\n\n')) {
       throw new Error('Generated content does not meet formatting requirements');
+    }
+
+    // Validate promotional content when required
+    if (preferences?.explicitness && preferences.explicitness >= 4 && preferences.context) {
+      const contextMentions = (content.match(new RegExp(preferences.context, 'gi')) || []).length;
+      if (contextMentions < 5) {
+        throw new Error('Generated content does not meet promotional requirements');
+      }
     }
 
     // Generate SEO keywords with product focus
@@ -199,15 +379,6 @@ Second section content.`;
 
     if (!content || !keywords.length) {
       throw new Error('Generated content is invalid');
-    }
-
-    // Validate promotional content when required
-    if (validatePreferences(preferences) && preferences.explicitness >= 4) {
-      const { context } = preferences;
-      const contextMentions = (content.match(new RegExp(context, 'gi')) || []).length;
-      if (contextMentions < 5) {
-        throw new Error('Generated content does not meet promotional requirements');
-      }
     }
 
     return {

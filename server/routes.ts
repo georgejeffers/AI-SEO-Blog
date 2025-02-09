@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertArticleSchema } from "@shared/schema";
-import { generateArticleIdeas, generateArticleContent } from "./services/gemini";
+import { generateArticleIdeas, generateArticleContent } from "./services/openai";
 import express from "express";
 
 function cleanContent(content: string): string | string[] {
@@ -146,12 +146,12 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('Generate Ideas Request Body:', req.body);
 
-      const { keyword } = req.body;
+      const { keyword, preferences } = req.body;
       if (!keyword) {
         return res.status(400).json({ error: "Keyword is required" });
       }
 
-      const ideas = await generateArticleIdeas(keyword);
+      const ideas = await generateArticleIdeas(keyword, preferences);
       res.json(ideas);
     } catch (error: any) {
       console.error('Error generating article ideas:', error);
@@ -167,12 +167,12 @@ export function registerRoutes(app: Express): Server {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      const { title, keyword } = req.body;
+      const { title, keyword, preferences } = req.body;
       if (!title || !keyword) {
         return res.status(400).json({ error: "Title and keyword are required" });
       }
 
-      const generated = await generateArticleContent(title, keyword);
+      const generated = await generateArticleContent(title, keyword, preferences);
       if (!generated) {
         throw new Error("Failed to generate article content");
       }

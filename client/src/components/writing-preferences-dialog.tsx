@@ -12,21 +12,35 @@ import { useToast } from "@/hooks/use-toast";
 import { Slider } from "@/components/ui/slider";
 import { Settings } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface WritingPreferences {
   context: string;
   explicitness: number;
+  userPreferences: string;
 }
 
 export function WritingPreferencesDialog() {
   const [open, setOpen] = useState(false);
   const [preferences, setPreferences] = useState<WritingPreferences>(() => {
     const saved = localStorage.getItem("writingPreferences");
-    return saved ? JSON.parse(saved) : { context: "", explicitness: 1 };
+    return saved ? JSON.parse(saved) : { 
+      context: "", 
+      explicitness: 1,
+      userPreferences: "" 
+    };
   });
   const { toast } = useToast();
 
   const savePreferences = () => {
+    if (!preferences.context.trim()) {
+      toast({
+        title: "Missing Context",
+        description: "Please provide a context (website, brand, or theme) to optimize your content.",
+        variant: "destructive"
+      });
+      return;
+    }
     localStorage.setItem("writingPreferences", JSON.stringify(preferences));
     toast({
       title: "Preferences Saved",
@@ -52,14 +66,30 @@ export function WritingPreferencesDialog() {
             <Label>
               Content Context
               <span className="text-xs text-muted-foreground ml-2">
-                (URLs, messages, or themes to naturally include)
+                (Website or brand to promote)
               </span>
             </Label>
-            <Textarea
-              placeholder="Enter websites, messages, or themes you want to promote in your content..."
+            <Input
+              placeholder="Enter the website or brand you want to promote (e.g. https://www.resoled.it/)"
               value={preferences.context}
               onChange={(e) =>
                 setPreferences({ ...preferences, context: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>
+              Additional Preferences
+              <span className="text-xs text-muted-foreground ml-2">
+                (Key features or themes to emphasize)
+              </span>
+            </Label>
+            <Textarea
+              placeholder="Enter key features, benefits, or themes to emphasize (e.g. inventory management, label generation, fastest on the market)"
+              value={preferences.userPreferences}
+              onChange={(e) =>
+                setPreferences({ ...preferences, userPreferences: e.target.value })
               }
               className="min-h-[100px]"
             />
